@@ -7,7 +7,12 @@ import (
 	"time"
 
 	"github.com/multiversx/mx-chain-core-go/core/check"
+	"github.com/multiversx/mx-chain-core-go/data"
 	outportcore "github.com/multiversx/mx-chain-core-go/data/outport"
+	"github.com/multiversx/mx-chain-core-go/data/rewardTx"
+	"github.com/multiversx/mx-chain-core-go/data/smartContractResult"
+	"github.com/multiversx/mx-chain-core-go/data/transaction"
+	"github.com/multiversx/mx-chain-go/storage/txcache"
 	logger "github.com/multiversx/mx-chain-logger-go"
 )
 
@@ -25,10 +30,20 @@ type outport struct {
 	timeForDriverCall time.Duration
 	messageCounter    uint64
 	config            outportcore.OutportConfig
+	chainHandler      data.ChainHandler
+}
+
+type NewTransactionInPool struct {
+	TxHash            []byte                   `protobuf:"bytes,1,opt,name=TxHash,proto3" json:"txHash"`
+	CurrentBlockNonce uint64                   `protobuf:"varint,2,opt,name=CurrentBlockNonce,proto3" json:"currentBlockNonce,omitempty"`
+	Timestamp         uint64                   `protobuf:"varint,3,opt,name=Timestamp,proto3" json:"timestamp,omitempty"`
+	SenderShardID     uint32                   `protobuf:"varint,4,opt,name=SourceShardID,proto3" json:"sourceShardID,omitempty"`
+	ReceiverShardID   uint32                   `protobuf:"varint,5,opt,name=DestinationShardID,proto3" json:"destinationShardID,omitempty"`
+	Transaction       *transaction.Transaction `protobuf:"bytes,6,opt,name=Transaction,proto3" json:"transaction,omitempty"`
 }
 
 // NewOutport will create a new instance of proxy
-func NewOutport(retrialInterval time.Duration, cfg outportcore.OutportConfig) (*outport, error) {
+func NewOutport(retrialInterval time.Duration, cfg outportcore.OutportConfig, chainHandler data.ChainHandler) (*outport, error) {
 	if retrialInterval < minimumRetrialInterval {
 		return nil, fmt.Errorf("%w, provided: %d, minimum: %d", ErrInvalidRetrialInterval, retrialInterval, minimumRetrialInterval)
 	}
@@ -41,6 +56,7 @@ func NewOutport(retrialInterval time.Duration, cfg outportcore.OutportConfig) (*
 		logHandler:        log.Log,
 		timeForDriverCall: maxTimeForDriverCall,
 		config:            cfg,
+		chainHandler:      chainHandler,
 	}, nil
 }
 
@@ -338,6 +354,52 @@ func (o *outport) finalizedBlockBlocking(finalizedBlock *outportcore.FinalizedBl
 		if o.shouldTerminate() {
 			return
 		}
+	}
+}
+
+// NewTransactionHandlerInPool implements OutportHandler.
+func (o *outport) NewTransactionInPool(key []byte, value interface{}) {
+	if check.IfNilReflect(value) {
+		return
+	}
+
+	switch t := value.(type) {
+	case *txcache.WrappedTransaction:
+		tx, isTransaction := t.Tx.(*transaction.Transaction)
+		if !isTransaction {
+			log.Warn("programming error in NewTransactionHandlerInPool, improper value",
+				"value type", fmt.Sprintf("%T", value),
+				"value.Tx type", fmt.Sprintf("%T", t.Tx))
+			return
+		}
+
+		nonce := o.chainHandler.GetCurrentBlockHeader().GetNonce()
+
+		finalTx := NewTransactionInPool{
+			TxHash:            key,
+			CurrentBlockNonce: nonce,
+			Timestamp:         uint64(time.Now().Unix()),
+			SenderShardID:     t.SenderShardID,
+			ReceiverShardID:   t.ReceiverShardID,
+			Transaction:       tx,
+		}
+
+		log.Debug("Hey Tx ", "hash", "SndAddr", finalTx.TxHash, finalTx.Transaction.SndAddr)
+		for _, driver := range o.drivers {
+			err := driver.NewTransactionInPool(finalTx)
+			if err == nil {
+				return
+			}
+		}
+	case *rewardTx.RewardTx:
+		// TODO something with the reward transaction
+		_ = t
+	case *smartContractResult.SmartContractResult:
+		// TODO something with the smart contract result transaction
+		_ = t
+	default:
+		log.Warn("programming error in NewTransactionHandlerInPool, improper value",
+			"value type", fmt.Sprintf("%T", value))
 	}
 }
 

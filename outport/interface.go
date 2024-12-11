@@ -16,6 +16,7 @@ type Driver interface {
 	SaveValidatorsRating(validatorsRating *outportcore.ValidatorsRating) error
 	SaveAccounts(accounts *outportcore.Accounts) error
 	FinalizedBlock(finalizedBlock *outportcore.FinalizedBlock) error
+	NewTransactionInPool(transaction interface{}) error
 	GetMarshaller() marshal.Marshalizer
 	SetCurrentSettings(config outportcore.OutportConfig) error
 	RegisterHandler(handlerFunction func() error, topic string) error
@@ -33,6 +34,7 @@ type OutportHandler interface {
 	SaveValidatorsRating(validatorsRating *outportcore.ValidatorsRating)
 	SaveAccounts(accounts *outportcore.Accounts)
 	FinalizedBlock(finalizedBlock *outportcore.FinalizedBlock)
+	NewTransactionInPool(key []byte, value interface{})
 	SubscribeDriver(driver Driver) error
 	HasDrivers() bool
 	Close() error

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/multiversx/mx-chain-core-go/data"
 	outportcore "github.com/multiversx/mx-chain-core-go/data/outport"
 	indexerFactory "github.com/multiversx/mx-chain-es-indexer-go/process/factory"
 	"github.com/multiversx/mx-chain-go/outport"
@@ -17,6 +18,7 @@ type OutportFactoryArgs struct {
 	ElasticIndexerFactoryArgs indexerFactory.ArgsIndexerFactory
 	EventNotifierFactoryArgs  *EventNotifierFactoryArgs
 	HostDriversArgs           []ArgsHostDriverFactory
+	ChainHandler              data.ChainHandler
 }
 
 // CreateOutport will create a new instance of OutportHandler
@@ -31,7 +33,7 @@ func CreateOutport(args *OutportFactoryArgs) (outport.OutportHandler, error) {
 		IsInImportDBMode: args.IsImportDB,
 	}
 
-	outportHandler, err := outport.NewOutport(args.RetrialInterval, cfg)
+	outportHandler, err := outport.NewOutport(args.RetrialInterval, cfg, args.ChainHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +75,13 @@ func createAndSubscribeElasticDriverIfNeeded(
 		return nil
 	}
 
-	elasticDriver, err := indexerFactory.NewIndexer(args)
-	if err != nil {
-		return err
-	}
+	// elasticDriver, err := indexerFactory.NewIndexer(args)
+	// if err != nil {
+	// 	return err
+	// }
 
-	return outport.SubscribeDriver(elasticDriver)
+	// return outport.SubscribeDriver(elasticDriver)
+	return nil
 }
 
 func createAndSubscribeEventNotifierIfNeeded(

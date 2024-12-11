@@ -17,6 +17,7 @@ const (
 	pushEventEndpoint       = "/events/push"
 	revertEventsEndpoint    = "/events/revert"
 	finalizedEventsEndpoint = "/events/finalized"
+	NewTransactionEndpoint  = "/events/txpool"
 )
 
 type eventNotifier struct {
@@ -90,6 +91,17 @@ func (en *eventNotifier) FinalizedBlock(finalizedBlock *outport.FinalizedBlock) 
 	err := en.httpClient.Post(finalizedEventsEndpoint, finalizedBlock)
 	if err != nil {
 		return fmt.Errorf("%w in eventNotifier.FinalizedBlock while posting event data", err)
+	}
+
+	return nil
+}
+
+// NewTransactionHandlerInPool converts tx in pool data in order to push it to subscribers
+func (en *eventNotifier) NewTransactionInPool(transaction interface{}) error {
+	err := en.httpClient.Post(NewTransactionEndpoint, transaction)
+	if err != nil {
+		// 	return fmt.Errorf("%w in eventNotifier.NewTransactionInPool while posting event data", err)
+		log.Error("Avoiding error => NewTransactionInPool", "error", err)
 	}
 
 	return nil
